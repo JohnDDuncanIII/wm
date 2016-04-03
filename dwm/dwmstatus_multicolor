@@ -1,0 +1,104 @@
+#!/bin/sh
+
+FONT='-artwiz-cure-medium-r-normal--11-110-75-75-p-90-iso8859-1'
+
+getCpuload() {
+    cpuuser=$(top -l 1| awk '/CPU usage/ {print $3}')
+    cpusys=$(top -l 1| awk '/CPU usage/ {print $5}')
+    cpuidle=$(top -l 1| awk '/CPU usage/ {print $7}')
+ 
+    rcpuuser=$(echo "$cpuuser" | awk '{printf "%.0f\n", $1}')
+    rcpusys=$(echo "$cpusys" | awk '{printf "%.0f\n", $1}')
+    rcpuidle=$(echo "$cpuidle" | awk '{printf "%.0f\n", $1}')
+
+    echo "\x07\x01 $rcpuuser%|$rcpusys%|$rcpuidle%"
+}
+
+getTemp() {
+    zipcode=""
+    #example: zipcode="20004"
+    weather=$(curl --silent "http://xml.weather.yahoo.com/forecastrss?p=$zipcode&u=f" | grep -E '(Current Conditions:|F<BR)' | sed -e 's/Current Conditions://' -e 's/<br \/>//' -e 's/<b>//' -e 's/<\/b>//' -e 's/<BR \/>//' -e 's/<description>//' -e 's/<\/description>//')
+
+    strL=${#weather}
+    finalS=`echo ${weather:1:$strL}`
+            echo "\x02  \x01 $finalS "
+}
+
+getFs() {
+    USED=`df -h | awk '/disk/ {print $3}'`
+    TOTAL=`df -h | awk '/disk/ {print $2}'`
+    PERC=`df -h | awk '/disk/ {print $5}'`
+    tString=${#PERC}
+    strL=`echo $tString`
+    tPERC=`echo ${PERC:0:strL-1}`
+
+    if (( "$tPERC" > "75"  )); then
+           echo " \x02  \x01 $USED/$TOTAL[\x01$PERC\x01] "
+        elif (( "$tPERC" < "75" && "$tPERC" > "25" )); then 
+           echo " \x02  \x01 $USED/$TOTAL[\x01$PERC\x01] "
+        else
+           echo " \x02  \x01 $USED/$TOTAL[\x01$PERC\x01] "
+        fi
+}
+
+getVolume() {
+		VOLUME=`osascript -e "set cureVolume to output volume of (get volume settings)"`
+        if (( "$VOLUME" > "75"  )); then
+            echo "\x02 \x01 $VOLUME%"
+        elif (( "$VOLUME" < "75" && "$VOLUME" > "25" )); then 
+            echo "\x02 \x01 $VOLUME%"
+        else
+            echo "\x02 \x01 $VOLUME%"
+        fi
+}
+
+getMpd() {
+    current=$(mpc current)
+    time=`mpc | grep playing | awk '{ print $3 }'`
+    paused=`mpc | awk '/paused/ {print $1}'`
+    playing=`mpc | awk '/playing/ {print $1}'`
+
+		if [ "$paused" = "[paused]" ]; then
+              echo "\x02  \x01 Music \x01Paused\x01"
+        elif [ "$playing" = "[playing]" ]; then
+             echo "\x02  \x01 $current [$time]\x01"
+        else
+            echo "\x02  \x01 Music \x01Stopped\x01"
+
+	    fi
+}
+
+getDate() { 
+		date_command=$(date +"%A, %B %d %Y - %I:%M:%S %p")
+        echo "\x02  \x01 $date_command "
+    
+}
+
+getBattery() {
+	mString=`pmset -g batt | awk '/-InternalBattery-0/ {print $2}'`
+    tString=${#mString}
+    strL=`echo $tString`
+    result=$[$strL - 1]
+    finalS=`echo ${mString:0:$result}`
+    finalS2=`echo ${mString:0:$result-1}`
+
+    if (( "$finalS2" > "75"  )); then
+            echo "\x02  \x01 $finalS "
+        elif (( "$finalS2" > "25" && "$finalS2" < "75" )); then 
+            echo "\x02  \x01 $finalS "
+        else
+            echo "\x02  \x01 $finalS "
+        fi 
+}
+
+getMail() {
+    user=""
+    #example: user="John"
+    pass=""
+    #example: pass:"password123"
+    mail_count=`curl -s https://$user:$pass@mail.google.com/mail/feed/atom | sed -n '/^<fullcount>\([0-9]*\)<\/fullcount>$/s//\1/p'`
+    echo "\x02  \x01 $mail_count Unread "
+
+}
+
+xsetroot -name "$(getMpd)  $(getVolume)  $(getMail) $(getTemp)$(getFs) $(getBattery) $(getDate) $(echo "\x08")"                 " 
